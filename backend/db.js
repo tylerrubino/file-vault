@@ -135,15 +135,23 @@ const insertFile = (
 };
 
 // Retrieve all file metadata
-const getFiles = (userId, callback) => {
-	db.all(`SELECT * FROM files WHERE owner_id = ?`, [userId], (err, rows) => {
-		if (err) {
-			console.error('Error fetching files:', err.message);
-			return callback(err);
-		}
-		console.log(`Files retrieved for userId ${userId}:`, rows);
-		callback(null, rows);
+const getFiles = (userId) => {
+	return new Promise((resolve, reject) => {
+		db.all(`SELECT * FROM files WHERE owner_id = ?`, [userId], (err, rows) => {
+			if (err) {
+				return reject(err);
+			}
+			resolve(rows);
+		});
 	});
+
+	// 	if (err) {
+	// 		console.error('Error fetching files:', err.message);
+	// 		return callback(err);
+	// 	}
+	// 	console.log(`Files retrieved for userId ${userId}:`, rows);
+	// 	callback(null, rows);
+	// });
 };
 
 // Check if a file exists by filename
@@ -169,7 +177,8 @@ const deleteFileById = (id, callback) => {
 };
 
 // Function to add new user
-const addUser = (username, password, callback) => {
+const addUser = (username, password, callback = () => {}) => {
+	// Default callback
 	bcrypt.hash(password, 10, (err, hashedPassword) => {
 		if (err) return callback(err);
 
@@ -179,7 +188,7 @@ const addUser = (username, password, callback) => {
 			function (err) {
 				if (err) {
 					console.error('Error adding user:', err.message);
-					return callback;
+					return callback(err);
 				}
 				callback(null, this.lastID);
 			}

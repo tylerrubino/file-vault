@@ -1,25 +1,43 @@
-import logo from './logo.svg';
-import './App.css';
+import React from 'react';
+import {
+	BrowserRouter as Router,
+	Route,
+	Routes,
+	Navigate,
+} from 'react-router-dom';
+import NavBar from './components/NavBar';
+import Login from './components/Login';
+import Register from './components/Register';
+import SharedFiles from './components/SharedFiles';
+import FileUpload from './components/FileUpload';
+import Dashboard from './components/Dashboard';
+import Home from './components/Home';
+import { useAuth } from './hooks/useAuth'; // Custom hook for auth state
 
 function App() {
-  return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
-  );
+	const { isLoggedIn } = useAuth();
+
+	return (
+		<Router>
+			<NavBar />
+			<Routes>
+				<Route path='/' element={<Home />} />
+				<Route
+					path='/dashboard'
+					element={isLoggedIn ? <Dashboard /> : <Navigate to='/login' />}
+				/>
+				{isLoggedIn && (
+					<>
+						<Route path='/shared-files' element={<SharedFiles />} />
+						<Route path='/upload' element={<FileUpload />} />
+					</>
+				)}
+
+				<Route path='/login' element={<Login />} />
+				<Route path='/register' element={<Register />} />
+			</Routes>
+		</Router>
+	);
 }
 
 export default App;

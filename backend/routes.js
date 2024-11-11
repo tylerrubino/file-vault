@@ -88,17 +88,24 @@ module.exports = (io) => {
 	);
 
 	// GET /api/files - Retrieve metadata for all file
-	router.get('/files', authenticateToken, (req, res) => {
+	router.get('/files', authenticateToken, async (req, res) => {
 		const userId = req.user.userId;
-
+		try {
+			const files = await getFiles(userId);
+			res.status(200).json(files);
+		} catch (error) {
+			res
+				.status(500)
+				.json({ message: 'Error retrieving files', error: error.message });
+		}
 		// Retrieve metadata
-		getFiles(userId, (err, rows) => {
-			if (err) {
-				return res.status(500).json({ message: 'Database error' });
-			}
-			io.emit('filesRetrieved');
-			res.status(200).json(rows);
-		});
+		// getFiles(userId, (err, rows) => {
+		// 	if (err) {
+		// 		return res.status(500).json({ message: 'Database error' });
+		// 	}
+		// 	io.emit('filesRetrieved');
+		// 	res.status(200).json(rows);
+		// });
 	});
 
 	// GET /api/download/:filename - Download a file
@@ -108,30 +115,37 @@ module.exports = (io) => {
 		// Check if the file with a custom name exists in the database
 		getFileByFilename(custom_name, (err, file) => {
 			if (err) {
+				console.error('Database error:', err.message);
 				return res.status(500).json({ message: 'Database error' });
 			}
 
 			if (!file) {
+				console.log(
+					`No file found in database for custom_name: ${custom_name}`
+				);
 				return res.status(404).json({ message: 'File not found in database' });
 			}
 
 			// Define the path to the actual filename in the uploads folder
 			const filePath = path.join(__dirname, 'uploads', file.filename);
+			console.log(`Resolved file path: ${filePath}`); // Debugging
 
 			// Send the file for download
 			res.download(filePath, (err) => {
 				if (err) {
-					res.status(404).json({ message: 'File not found on server' });
+					console.error('Error sending file for download:', err.message);
+					return res.status(500).json({ message: 'Error downloading file' });
 				}
 
 				// Notify clients of new upload
-				io.emit('fileDownloaded', {
-					fileId: file.id,
-					filename: file.filename,
-					custom_name: file.custom_name,
-					description: file.description,
-					size: file.size,
-				});
+				// io.emit('fileDownloaded', {
+				// 	fileId: file.id,
+				// 	filename: file.filename,
+				// 	custom_name: file.custom_name,
+				// 	description: file.description,
+				// 	size: file.size,
+				// });
+				// res.status(200).end();
 			});
 		});
 	});
@@ -140,71 +154,184 @@ module.exports = (io) => {
 	router.delete('/files/:id', authenticateToken, (req, res) => {
 		const userId = req.user.userId;
 		const { id: fileId } = req.params;
+		console.log(`Delete request for fileId: ${fileId} by userId: ${userId}`); // Debugging
 
-		db.get(`SELECT * FROM user_files WHERE id = ?`, [fileId], (err, file) => {
-			if (err) {
-				return res.status(500).json({ message: 'Database error' });
-			}
+		db.get(
+			`SELECT * FROM user_files WHERE file_id = ? AND user_id = ?`,
+			[fileId, userId],
+			(err, file) => {
+				if (err) {
+					console.error('Database error during delete:', err.message);
+					return res.status(500).json({ message: 'Database error' });
+				}
 
-			if (!file) {
-				return res
-					.status(404)
-					.json({ message: 'File not found for this user' });
-			}
-			// If user is the owner, delete file if no other users are linked
-			if (file.owner_id === userId) {
-				checkFileSharedWithOtherUsers(fileId, (err, hasOtherUsers) => {
-					if (err)
-						return res
-							.status(500)
-							.json({ message: 'Database error checking file links' });
+				if (!file) {
+					console.log('File not found or user does not have access'); // Debugging
+					return res
+						.status(404)
+						.json({ message: 'File not found for this user' });
+				}
+				// Check if the user is the owner of the file
+				db.get(
+					`SELECT owner_id FROM files WHERE id = ?`,
+					[fileId],
+					(err, fileData) => {
+						if (err) {
+							console.error(
+								'Database error during ownership check:',
+								err.message
+							);
+							return res
+								.status(500)
+								.json({ message: 'Database error during ownership check' });
+						}
 
-					if (hasOtherUsers) {
-						// Only remove user's link if other users still have access
-						deleteUserFileLink(userId, fileId, (err) => {
-							if (err)
-								return res
-									.status(500)
-									.json({ message: 'Failed to remove access' });
-							res.status(200).json({ message: 'Access removed' });
-						});
-					} else {
-						// No other users have access, so delete file completely
-						deleteFileCompletely(fileId, file.filename, (err) => {
-							if (err)
-								return res
-									.status(500)
-									.json({ message: 'Failed to delete file' });
-							res.status(200).json({ message: 'File deleted completely' });
-						});
+						const isOwner = fileData && fileData.owner_id === userId;
+
+						if (isOwner) {
+							// If user is the owner, check if there are other users linked to the file
+							checkFileSharedWithOtherUsers(fileId, (err, hasOtherUsers) => {
+								if (err) {
+									console.error(
+										'Database error checking file links:',
+										err.message
+									);
+									return res
+										.status(500)
+										.json({ message: 'Database error checking file links' });
+								}
+
+								if (hasOtherUsers) {
+									console.log(
+										'Other users are linked; only removing access for this user'
+									); // Debugging
+									deleteUserFileLink(userId, fileId, (err) => {
+										if (err) {
+											console.error('Failed to remove access:', err.message);
+											return res
+												.status(500)
+												.json({ message: 'Failed to remove access' });
+										}
+										res.status(200).json({ message: 'Access removed' });
+									});
+								} else {
+									console.log(
+										'No other users are linked; deleting file completely'
+									); // Debugging
+									deleteFileCompletely(fileId, file.filename, (err) => {
+										if (err) {
+											console.error('Failed to delete file:', err.message);
+											return res
+												.status(500)
+												.json({ message: 'Failed to delete file' });
+										}
+										res
+											.status(200)
+											.json({ message: 'File deleted completely' });
+									});
+								}
+							});
+						} else {
+							// If user is not the owner, just remove their access link
+							console.log(
+								'User is not the owner; removing only their access link'
+							); // Debugging
+							deleteUserFileLink(userId, fileId, (err) => {
+								if (err) {
+									console.error('Failed to remove access:', err.message);
+									return res
+										.status(500)
+										.json({ message: 'Failed to remove access' });
+								}
+								res.status(200).json({ message: 'Access removed' });
+							});
+						}
+						// If user is the owner, delete file if no other users are linked
+						// if (file.owner_id === userId) {
+						// 	checkFileSharedWithOtherUsers(fileId, (err, hasOtherUsers) => {
+						// 		if (err) {
+						// 			console.error('Database error checking file links:', err.message);
+						// 			return res
+						// 				.status(500)
+						// 				.json({ message: 'Database error checking file links' });
+						// 		}
+						// 		if (hasOtherUsers) {
+						// 			console.log(
+						// 				'Other users are linked; only removing access for this user'
+						// 			); // Debugging
+						// 			// Only remove user's link if other users still have access
+						// 			deleteUserFileLink(userId, fileId, (err) => {
+						// 				if (err) {
+						// 					console.error('Failed to remove access:', err.message);
+						// 					return res
+						// 						.status(500)
+						// 						.json({ message: 'Failed to remove access' });
+						// 				}
+
+						// 				res.status(200).json({ message: 'Access removed' });
+						// 			});
+						// 		} else {
+						// 			console.log(
+						// 				'No other users are linked; deleting file completely'
+						// 			); // Debugging
+						// 			// No other users have access, so delete file completely
+						// 			deleteFileCompletely(fileId, file.filename, (err) => {
+						// 				if (err) {
+						// 					console.error('Failed to delete file:', err.message);
+						// 					return res
+						// 						.status(500)
+						// 						.json({ message: 'Failed to delete file' });
+						// 				}
+						// 				res.status(200).json({ message: 'File deleted completely' });
+						// 			});
+						// 		}
+						// 	});
+						// } else {
+						// 	// If user is not the owner, simply delete their access link
+						// 	console.log('User is not the owner; removing only their access link'); // Debugging
+						// 	deleteUserFileLink(userId, fileId, (err) => {
+						// 		console.error('Failed to remove access:', err.message);
+						// 		if (err)
+						// 			return res
+						// 				.status(500)
+						// 				.json({ message: 'Failed to remove access' });
+						// 		res.status(200).json({ message: 'Access removed' });
+						// 	});
+						// }
 					}
-				});
-			} else {
-				// If user is not the owner, simply delete their access link
-				deleteUserFileLink(userId, fileId, (err) => {
-					if (err)
-						return res.status(500).json({ message: 'Failed to remove access' });
-					res.status(200).json({ message: 'Access removed' });
-				});
+				);
 			}
-		});
+		);
 	});
 
 	// User registration
-	router.post('/register', (req, res) => {
+	router.post('/register', async (req, res) => {
 		const { username, password } = req.body;
 
 		addUser(username, password, (err, userId) => {
 			if (err) {
 				if (err.message.includes('UNIQUE constraint failed')) {
-					// Return a 409 Conflict error for duplicate username
-					return res.status(409).json({ message: 'Username already exists' });
+					return res.status(400).json({ message: 'Username already exists' });
+				} else {
+					console.error('Registration error:', err);
+					return res.status(500).json({ message: 'Registration error' });
 				}
-				// Return a 500 error for other database issues
-				return res.status(500).json({ message: 'User registration failed' });
 			}
-			res.status(200).json({ message: 'User registered successfully', userId });
+
+			res.status(201).json({ message: 'User registered successfully', userId });
 		});
+
+		// addUser(username, password, (err, userId) => {
+		// 	if (err) {
+		// 		if (err.message.includes('UNIQUE constraint failed')) {
+		// 			// Return a 409 Conflict error for duplicate username
+		// 			return res.status(409).json({ message: 'Username already exists' });
+		// 		}
+		// 		// Return a 500 error for other database issues
+		// 		return res.status(500).json({ message: 'User registration failed' });
+		// 	}
+		// 	res.status(200).json({ message: 'User registered successfully', userId });
+		// });
 	});
 
 	// POST /api/login - Login and authenticate
@@ -240,20 +367,37 @@ module.exports = (io) => {
 	// Share a file with another user
 	router.post('/share', authenticateToken, (req, res) => {
 		const userId = req.user.userId;
-		const { fileId, sharedWithUserId } = req.body;
+		const { fileId, sharedWithUsername } = req.body;
 
-		shareFileWithUser(fileId, sharedWithUserId, userId, (err, shareId) => {
-			if (err) {
-				if (err.status === 403) {
-					return res.status(403).json({ message: err.message }); // Not authorized error
+		db.get(
+			`SELECT id FROM users WHERE username = ?`,
+			[sharedWithUsername],
+			(err, user) => {
+				if (err) {
+					console.error('Database error:', err.message);
+					return res.status(500).json({ message: 'Database error' });
 				}
-				return res
-					.status(500)
-					.json({ message: 'Database error', error: err.message });
-			}
+				if (!user) {
+					return res.status(404).json({ message: 'User not found' });
+				}
 
-			res.status(200).json({ message: 'File shared successfully' });
-		});
+				const sharedWithUserId = user.id;
+
+				// Proceed to share the file with the found user ID
+				shareFileWithUser(fileId, sharedWithUserId, userId, (err) => {
+					if (err) {
+						if (err.status === 403) {
+							return res.status(403).json({ message: err.message }); // Not authorized error
+						}
+						return res
+							.status(500)
+							.json({ message: 'Database error', error: err.message });
+					}
+
+					res.status(200).json({ message: 'File shared successfully' });
+				});
+			}
+		);
 	});
 
 	// Get shared files for the authenticated user

@@ -4,12 +4,22 @@ const routes = require('./routes');
 const path = require('path');
 const http = require('http');
 const socketIo = require('socket.io');
+const cors = require('cors');
 
 const app = express();
 const server = http.createServer(app); // create an HTTP server
 const io = socketIo(server); // init socket.io with server
 
-const PORT = process.env.port || 3000;
+const PORT = process.env.port || 5000;
+
+// Use CORS middleware
+app.use(
+	cors({
+		origin: 'http://localhost:3000', // allow requests from frontend
+		methods: ['GET', 'POST', 'PUT', 'DELETE'], // specify HTTP methods
+		credentials: true, // enable cookies
+	})
+);
 
 // Middleware
 app.use(express.json());
