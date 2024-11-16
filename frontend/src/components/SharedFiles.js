@@ -1,4 +1,3 @@
-// src/components/SharedFiles.js
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { FaDownload, FaTrashAlt } from 'react-icons/fa';
@@ -50,7 +49,7 @@ function SharedFiles() {
 	const handleDelete = async (m) => {
 		const token = localStorage.getItem('authToken');
 		try {
-			await axios.delete(`http://localhost:5000/api/files/${m}`, {
+			await axios.delete(`http://localhost:5000/api/shared-files/${m}`, {
 				headers: { Authorization: `Bearer ${token}` },
 			});
 			// Remove the deleted file from the state

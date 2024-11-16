@@ -1,28 +1,18 @@
 # file-vault
 
-file-vault is a private, web-based file storage and sharing application. It allows users to upload, manage, and share files securely with other users. Built with a Node.js backend and a React frontend, this project is intended to be a self-hosted solution for private file management.
+file-vault is a secure and user-friendly file sharing and storage web application. Designed to handle file uploads, sharing between users, and secure authentication, it provides a robust platform for managing your files online.
 
 The inspiration behind this project was in regards to how I was sharing files between my devices. Consistently using a private discord server to share compressed files and school assignments was beginning to become impractical, and being a CS major, simply using an already existing file sharing system was not practical enough apparently.
-
-### Project Status
-
-**Currently in Development**: The backend is complete, and the frontend is now in development. The app uses SQLite for metadata and the local filesystem for file storage, but future iterations may explore cloud storage options or database migration. SQLite was chosen since it is lightweight and easy to get running quickly.
-
----
 
 ## Features
 
 ### Backend
 
-- **File Upload, Download, and Deletion**: Users can securely upload, download, and delete files.
+- **User Authentication**: Secure login and registration with hashed passwords and JWT-based authentication.
+- **File Management**: Upload, delete, download, and view files with a clean and responsive UI.
 - **File Sharing**: Owners can share files with other registered users and manage access.
 - **Access Revocation**: Owners can revoke access for specific users, and shared users can remove their own access.
-- **User Authentication**: JWT-based authentication for secure access.
 - **Real-Time Notifications**: Socket.io integration to notify users of updates, such as new uploads or access changes.
-
-### Frontend (In Progress)
-
-- A responsive React app will allow users to manage files, view shared files, and receive notifications.
 
 ## Tech Stack
 
@@ -32,11 +22,14 @@ The inspiration behind this project was in regards to how I was sharing files be
 - **SQLite**: Database for storing metadata, such as user and file information.
 - **Socket.io**: Real-time notifications.
 - **JWT (JSON Web Tokens)**: Authentication.
+- **Multer**: File-uploads.
 
 ### Frontend
 
 - **React**: User interface framework.
-- **Tailwind CSS** (Planned): For styling components and creating responsive layouts.
+- **Tailwind CSS**: For styling components and creating responsive layouts.
+- **Axios**: For API communication.
+- **React Router**: For navigation.
 
 ## Setup and Installation
 
@@ -44,6 +37,7 @@ The inspiration behind this project was in regards to how I was sharing files be
 
 - Node.js (v14 or higher)
 - SQLite3
+- npm or yarn
 
 ### Installation
 
@@ -55,12 +49,13 @@ The inspiration behind this project was in regards to how I was sharing files be
 
    ```
 
-2. **Install Backend Dependencies**:
+2. **Install Dependencies**:
 
    ```bash
    cd backend
    npm install
-
+   cd ../frontend
+   npm install
    ```
 
 3. **Setup Environment Variables**:
@@ -75,25 +70,43 @@ The inspiration behind this project was in regards to how I was sharing files be
 4. **Run the Backend Server**:
 
    ```bash
+   cd backend
    npm start
    ```
 
-5. **Install Frontend Dependencies (coming soon)**:
+5. **Run the Frontend**:
+
    ```bash
-   cd ../frontend
-   npm install
+   cd frontend
+   npm start
    ```
+
+6. **Access the app at** `http://localhost:3000`.
 
 ## API Endpoints
 
+### Authentication
+
+| Method | Endpoint        | Description                   |
+| ------ | --------------- | ----------------------------- |
+| POST   | `/api/register` | Register a new user           |
+| POST   | `/api/login`    | Login and receive a JWT token |
+
+### File Management
+
+| Method | Endpoint                     | Description                      |
+| ------ | ---------------------------- | -------------------------------- |
+| POST   | `/api/upload`                | Upload a new file                |
+| GET    | `/api/files`                 | Retrieve all user-uploaded files |
+| DELETE | `/api/files/:id`             | Delete a user-owned file         |
+| GET    | `/api/download/:custom_name` | Download a file by custom name   |
+
+### File Sharing
+
 | Method | Endpoint                                      | Description                         |
 | ------ | --------------------------------------------- | ----------------------------------- |
-| POST   | `/api/register`                               | Register a new user                 |
-| POST   | `/api/login`                                  | Login and receive a JWT token       |
-| POST   | `/api/upload`                                 | Upload a new file                   |
-| GET    | `/api/files`                                  | Retrieve all user-uploaded files    |
+| POST   | `/api/share`                                  | Share a file with another user      |
 | GET    | `/api/shared-files`                           | Retrieve files shared with the user |
-| DELETE | `/api/files/:id`                              | Delete a user-owned file            |
 | DELETE | `/api/shared-files/:fileId/:sharedWithUserId` | Revoke access for a shared file     |
 
 ## Usage Notes
